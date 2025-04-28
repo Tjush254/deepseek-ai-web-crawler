@@ -1,13 +1,22 @@
-# config.py
+# E-commerce site configuration
 
-BASE_URL = "https://www.theknot.com/marketplace/wedding-reception-venues-atlanta-ga"
-CSS_SELECTOR = "[class^='info-container']"
-REQUIRED_KEYS = [
-    "name",
-    "price",
-    "location",
-    "capacity",
-    "rating",
-    "reviews",
-    "description",
+ECOMMERCE_SITES = {
+    "jumia": {
+        "BASE_URL": "https://www.jumia.co.ke/catalog/?q=",
+        "PRODUCT_SELECTOR": "article.prd",  # Update as needed
+        "PAGINATION_SELECTOR": "a.pg-next", # Update as needed
+    },
+    # Add more sites if needed
+}
+
+CATEGORIES = [
+    "electronics",
+    "phones",
+    "laptops",
+    "home appliances",
+    "fashion",
+    # Add more categories as needed
 ]
+
+REQUEST_DELAY = 2  # seconds between requests (adjust as needed)
+MAX_PAGES_PER_SEARCH = 3  # max number of pages to crawl per search (adjust as needed)

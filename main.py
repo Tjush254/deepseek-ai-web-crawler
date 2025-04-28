@@ -1,83 +1,59 @@
-import asyncio
-
-from crawl4ai import AsyncWebCrawler
+from utils.scraper_utils import crawl_ecommerce_site
 from dotenv import load_dotenv
-
-from config import BASE_URL, CSS_SELECTOR, REQUIRED_KEYS
-from utils.data_utils import (
-    save_venues_to_csv,
-)
-from utils.scraper_utils import (
-    fetch_and_process_page,
-    get_browser_config,
-    get_llm_strategy,
-)
-
 load_dotenv()
-
-
-async def crawl_venues():
-    """
-    Main function to crawl venue data from the website.
-    """
-    # Initialize configurations
-    browser_config = get_browser_config()
-    llm_strategy = get_llm_strategy()
-    session_id = "venue_crawl_session"
-
-    # Initialize state variables
-    page_number = 1
-    all_venues = []
-    seen_names = set()
-
-    # Start the web crawler context
-    # https://docs.crawl4ai.com/api/async-webcrawler/#asyncwebcrawler
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        while True:
-            # Fetch and process data from the current page
-            venues, no_results_found = await fetch_and_process_page(
-                crawler,
-                page_number,
-                BASE_URL,
-                CSS_SELECTOR,
-                llm_strategy,
-                session_id,
-                REQUIRED_KEYS,
-                seen_names,
-            )
-
-            if no_results_found:
-                print("No more venues found. Ending crawl.")
-                break  # Stop crawling when "No Results Found" message appears
-
-            if not venues:
-                print(f"No venues extracted from page {page_number}.")
-                break  # Stop if no venues are extracted
-
-            # Add the venues from this page to the total list
-            all_venues.extend(venues)
-            page_number += 1  # Move to the next page
-
-            # Pause between requests to be polite and avoid rate limits
-            await asyncio.sleep(2)  # Adjust sleep time as needed
-
-    # Save the collected venues to a CSV file
-    if all_venues:
-        save_venues_to_csv(all_venues, "complete_venues.csv")
-        print(f"Saved {len(all_venues)} venues to 'complete_venues.csv'.")
-    else:
-        print("No venues were found during the crawl.")
-
-    # Display usage statistics for the LLM strategy
-    llm_strategy.show_usage()
+import os
+import asyncio
+import argparse
+from config import ECOMMERCE_SITES, CATEGORIES
+from utils.data_utils import save_products_to_csv, format_product_summary
 
 
 async def main():
-    """
-    Entry point of the script.
-    """
-    await crawl_venues()
-
+    parser = argparse.ArgumentParser(description="E-commerce Deal Finder")
+    parser.add_argument("--site", choices=list(ECOMMERCE_SITES.keys()) + ["all"], default="all",
+                        help="E-commerce site to search")
+    parser.add_argument("--category", choices=CATEGORIES + ["all"], default="all",
+                        help="Product category to search for")
+    parser.add_argument("--search", type=str, default=None,
+                        help="Custom search term (otherwise category will be used)")
+    
+    args = parser.parse_args()
+    
+    sites_to_search = list(ECOMMERCE_SITES.keys()) if args.site == "all" else [args.site]
+    categories_to_search = CATEGORIES if args.category == "all" else [args.category]
+    
+    all_results = []
+    
+    for site_name in sites_to_search:
+        site_config = ECOMMERCE_SITES[site_name]
+        for category in categories_to_search:
+            search_term = args.search if args.search else category
+            print(f"\nSearching for '{search_term}' in {category} category on {site_name}...")
+            
+            products = await crawl_ecommerce_site(site_name, category, search_term)
+            
+            if products:
+                # Save products to CSV
+                filename = save_products_to_csv(products, category, site_name)
+                
+                # Print summary of best deals
+                summary = format_product_summary(products, category, site_name)
+                print("\n" + summary + "\n")
+                
+                # Add to overall results
+                all_results.extend(products)
+            else:
+                print(f"No products found for '{search_term}' in {category} category on {site_name}")
+    
+    # Save combined results if searching multiple sites/categories
+    if len(sites_to_search) > 1 or len(categories_to_search) > 1:
+        combined_filename = save_products_to_csv(all_results, "combined")
+        print(f"\nAll results saved to {combined_filename}")
+        
+        # Print overall best deals
+        overall_summary = format_product_summary(all_results)
+        print("\nOVERALL BEST DEALS ACROSS ALL SEARCHES:")
+        print(overall_summary)
 
 if __name__ == "__main__":
     asyncio.run(main())
